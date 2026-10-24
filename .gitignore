@@ -2,6 +2,7 @@
 data/
 wandb
 .data
+.langgraph_api/
 .tools/
 dev.ipynb
 job_spec.yaml
