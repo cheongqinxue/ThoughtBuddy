@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ThoughtBuddy Chess</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.css" />
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #0f1419;
+      --panel: #1a222d;
+      --text: #e7ecf3;
+      --muted: #9aa7b5;
+      --accent: #6ea8fe;
+      --border: #2b3645;
+      --good: #5bd786;
+      --warn: #ffcc66;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    header {
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+    }
+    header h1 { margin: 0; font-size: 1.25rem; }
+    header p { margin: 0.25rem 0 0; color: var(--muted); font-size: 0.9rem; }
+    main { padding: 1rem 1.5rem 2rem; }
+    .tabs { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
+    .tabs button {
+      background: var(--panel);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 0.55rem 1rem;
+      cursor: pointer;
+    }
+    .tabs button.active { background: var(--accent); color: #081018; border-color: var(--accent); }
+    .panel { display: none; }
+    .panel.active { display: block; }
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(280px, 420px) 1fr;
+      gap: 1rem;
+      align-items: start;
+    }
+    @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1rem;
+    }
+    .board-wrap { width: min(100%, 420px); margin: 0 auto; }
+    .meta { color: var(--muted); font-size: 0.92rem; line-height: 1.5; }
+    .status-line { margin: 0.75rem 0; }
+    .moves {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.85rem;
+      white-space: pre-wrap;
+      max-height: 320px;
+      overflow: auto;
+      background: #11161d;
+      border-radius: 8px;
+      padding: 0.75rem;
+      border: 1px solid var(--border);
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+    th, td { text-align: left; padding: 0.55rem 0.35rem; border-bottom: 1px solid var(--border); }
+    tr.clickable { cursor: pointer; }
+    tr.clickable:hover { background: rgba(110, 168, 254, 0.08); }
+    .toolbar { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 0.75rem 0; }
+    button.action {
+      background: #243041;
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.5rem 0.85rem;
+      cursor: pointer;
+    }
+    button.action.primary { background: var(--accent); color: #081018; border-color: var(--accent); }
+    .badge {
+      display: inline-block;
+      padding: 0.15rem 0.5rem;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      border: 1px solid var(--border);
+      color: var(--muted);
+    }
+    .badge.live { color: var(--good); border-color: rgba(91, 215, 134, 0.35); }
+    .error { color: #ff8e8e; margin-top: 0.5rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>ThoughtBuddy Chess</h1>
+      <p>Watch agent games, play Stockfish yourself, and replay stored sessions.</p>
+    </div>
+    <div class="badge live" id="live-badge">live polling</div>
+  </header>
+
+  <main>
+    <div class="tabs">
+      <button class="tab active" data-tab="live">Live Agent</button>
+      <button class="tab" data-tab="human">Play vs Stockfish</button>
+      <button class="tab" data-tab="replay">Replays</button>
+    </div>
+
+    <section class="panel active" id="panel-live">
+      <div class="layout">
+        <div class="card board-wrap">
+          <div id="board-live"></div>
+        </div>
+        <div class="card">
+          <h2>Agent vs Stockfish</h2>
+          <div class="meta status-line" id="live-meta">Loading active agent session…</div>
+          <div class="moves" id="live-moves"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel" id="panel-human">
+      <div class="layout">
+        <div class="card board-wrap">
+          <div id="board-human"></div>
+        </div>
+        <div class="card">
+          <h2>Human vs Stockfish</h2>
+          <div class="toolbar">
+            <button class="action primary" id="new-human-game">New Game (White)</button>
+            <button class="action" id="new-human-game-black">New Game (Black)</button>
+          </div>
+          <div class="meta status-line" id="human-meta">Click <strong>New Game</strong>, then drag a piece to move. Promotions default to queen.</div>
+          <div class="moves" id="human-moves"></div>
+          <div class="error" id="human-error"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel" id="panel-replay">
+      <div class="layout">
+        <div class="card">
+          <h2>Sessions</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>When</th>
+                <th>Matchup</th>
+                <th>Status</th>
+                <th>Result</th>
+              </tr>
+            </thead>
+            <tbody id="replay-table"></tbody>
+          </table>
+        </div>
+        <div class="card">
+          <h2>Replay</h2>
+          <div class="board-wrap"><div id="board-replay"></div></div>
+          <div class="toolbar">
+            <button class="action" id="replay-start">Start</button>
+            <button class="action" id="replay-prev">Prev</button>
+            <button class="action" id="replay-next">Next</button>
+            <button class="action" id="replay-end">End</button>
+          </div>
+          <div class="meta status-line" id="replay-meta">Select a session to replay.</div>
+          <div class="moves" id="replay-moves"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.js"></script>
+  <script>
+    const API = "/thoughtbuddy/chess";
+    let humanSession = null;
+    let humanGame = new Chess();
+    let humanBoard = null;
+    let liveBoard = null;
+    let replayBoard = null;
+    let replaySession = null;
+    let replayIndex = 0;
+    let liveTimer = null;
+
+    function boardConfig(elementId, orientation, draggable, onDrop) {
+      return {
+        draggable,
+        position: "start",
+        orientation,
+        pieceTheme: "/thoughtbuddy/chess/pieces/{piece}.png",
+        onDrop,
+      };
+    }
+
+    function formatMoves(moves) {
+      if (!moves || !moves.length) return "(no moves yet)";
+      return moves.map((move, index) => {
+        const prefix = move.player_role === "stockfish" ? "SF" : move.player_role === "agent" ? `A${move.agent_generation ?? "?"}` : "H";
+        return `${index + 1}. [${prefix}] ${move.san || move.uci}`;
+      }).join("\n");
+    }
+
+    function sessionSummary(session) {
+      if (!session) return "No active agent session.";
+      return [
+        `${session.label}`,
+        `Session: ${session.id}`,
+        `Status: ${session.status}${session.result ? ` (${session.result})` : ""}`,
+        `Turn: ${sideToMove(session.current_fen)}`,
+        `Updated: ${session.updated_at}`,
+      ].join(" · ");
+    }
+
+    function sideToMove(fen) {
+      return fen.split(" ")[1] === "w" ? "white" : "black";
+    }
+
+    async function fetchJson(url, options) {
+      const response = await fetch(url, options);
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error || `HTTP ${response.status}`);
+      }
+      return payload;
+    }
+
+    function renderBoard(board, fen, orientation) {
+      if (!board) return;
+      board.orientation(orientation || "white");
+      board.position(fen);
+    }
+
+    async function refreshLive() {
+      try {
+        const payload = await fetchJson(`${API}/sessions/active/agent`);
+        const session = payload.session;
+        document.getElementById("live-meta").textContent = sessionSummary(session);
+        document.getElementById("live-moves").textContent = session ? formatMoves(session.moves) : "(waiting for agent game)";
+        if (session) {
+          renderBoard(liveBoard, session.current_fen, session.player_color);
+        } else {
+          renderBoard(liveBoard, "start", "white");
+        }
+      } catch (error) {
+        document.getElementById("live-meta").textContent = `Live feed error: ${error.message}`;
+      }
+    }
+
+    function onHumanDrop(source, target) {
+      if (!humanSession) return "snapback";
+      const move = humanGame.move({ from: source, to: target, promotion: "q" });
+      if (move === null) return "snapback";
+
+      const uci = move.from + move.to + (move.promotion || "");
+      fetchJson(`${API}/sessions/${humanSession.id}/move`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ uci }),
+      }).then((payload) => {
+        humanSession = payload.session;
+        humanGame.load(humanSession.current_fen);
+        renderBoard(humanBoard, humanSession.current_fen, humanSession.player_color);
+        document.getElementById("human-meta").textContent = sessionSummary(humanSession);
+        document.getElementById("human-moves").textContent = formatMoves(humanSession.moves);
+        document.getElementById("human-error").textContent = "";
+        humanBoard.position(humanSession.current_fen);
+      }).catch((error) => {
+        humanGame.undo();
+        humanBoard.position(humanGame.fen());
+        document.getElementById("human-error").textContent = error.message;
+      });
+      return undefined;
+    }
+
+    async function startHumanGame(color) {
+      const payload = await fetchJson(`${API}/sessions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ player_color: color }),
+      });
+      humanSession = payload.session;
+      humanGame = new Chess(humanSession.current_fen);
+      humanBoard.orientation(humanSession.player_color);
+      humanBoard.position(humanSession.current_fen);
+      if (typeof humanBoard.resize === "function") {
+        humanBoard.resize();
+      }
+      document.getElementById("human-meta").textContent = sessionSummary(humanSession);
+      document.getElementById("human-moves").textContent = "(no moves yet)";
+      document.getElementById("human-error").textContent = "";
+    }
+
+    async function loadReplayTable() {
+      const payload = await fetchJson(`${API}/sessions?limit=100`);
+      const tbody = document.getElementById("replay-table");
+      tbody.innerHTML = "";
+      payload.sessions.forEach((session) => {
+        const row = document.createElement("tr");
+        row.className = "clickable";
+        row.innerHTML = `
+          <td>${session.created_at}</td>
+          <td>${session.label}</td>
+          <td>${session.status}</td>
+          <td>${session.result || "-"}</td>`;
+        row.addEventListener("click", () => selectReplay(session.id));
+        tbody.appendChild(row);
+      });
+    }
+
+    async function selectReplay(sessionId) {
+      const payload = await fetchJson(`${API}/sessions/${sessionId}`);
+      replaySession = payload.session;
+      replayIndex = replaySession.moves.length;
+      updateReplayBoard();
+      document.getElementById("replay-moves").textContent = formatMoves(replaySession.moves);
+    }
+
+    function updateReplayBoard() {
+      if (!replaySession) return;
+      const game = new Chess(replaySession.starting_fen);
+      const moves = replaySession.moves.slice(0, replayIndex);
+      moves.forEach((move) => {
+        const from = move.uci.slice(0, 2);
+        const to = move.uci.slice(2, 4);
+        const promotion = move.uci.length > 4 ? move.uci[4] : undefined;
+        game.move({ from, to, promotion });
+      });
+      renderBoard(replayBoard, game.fen(), replaySession.player_color);
+      document.getElementById("replay-meta").textContent = [
+        replaySession.label,
+        `Move ${replayIndex} / ${replaySession.moves.length}`,
+        replaySession.result ? `Result: ${replaySession.result}` : "",
+      ].filter(Boolean).join(" · ");
+    }
+
+    function resizeBoardForTab(tabName) {
+      const boardByTab = {
+        live: liveBoard,
+        human: humanBoard,
+        replay: replayBoard,
+      };
+      const board = boardByTab[tabName];
+      if (board && typeof board.resize === "function") {
+        setTimeout(() => board.resize(), 0);
+      }
+    }
+
+    document.querySelectorAll(".tab").forEach((button) => {
+      button.addEventListener("click", () => {
+        document.querySelectorAll(".tab").forEach((el) => el.classList.remove("active"));
+        document.querySelectorAll(".panel").forEach((el) => el.classList.remove("active"));
+        button.classList.add("active");
+        document.getElementById(`panel-${button.dataset.tab}`).classList.add("active");
+        resizeBoardForTab(button.dataset.tab);
+      });
+    });
+
+    document.getElementById("new-human-game").addEventListener("click", () => startHumanGame("white"));
+    document.getElementById("new-human-game-black").addEventListener("click", () => startHumanGame("black"));
+    document.getElementById("replay-start").addEventListener("click", () => { replayIndex = 0; updateReplayBoard(); });
+    document.getElementById("replay-prev").addEventListener("click", () => { replayIndex = Math.max(0, replayIndex - 1); updateReplayBoard(); });
+    document.getElementById("replay-next").addEventListener("click", () => {
+      if (!replaySession) return;
+      replayIndex = Math.min(replaySession.moves.length, replayIndex + 1);
+      updateReplayBoard();
+    });
+    document.getElementById("replay-end").addEventListener("click", () => {
+      if (!replaySession) return;
+      replayIndex = replaySession.moves.length;
+      updateReplayBoard();
+    });
+
+    liveBoard = Chessboard("board-live", boardConfig("board-live", "white", false));
+    humanBoard = Chessboard("board-human", boardConfig("board-human", "white", true, onHumanDrop));
+    replayBoard = Chessboard("board-replay", boardConfig("board-replay", "white", false));
+
+    refreshLive();
+    liveTimer = setInterval(refreshLive, 2000);
+    loadReplayTable();
+    setInterval(loadReplayTable, 10000);
+  </script>
+</body>
+</html>

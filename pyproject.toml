@@ -1,0 +1,61 @@
+[project]
+name = "thoughtbuddy"
+version = "0.1.0"
+description = "Stateful agent harness with queue-driven wakes, persistent pillars, and virtual-world experiments"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "chromadb>=1.5.9",
+    "croniter>=6.0",
+    "dotenv>=0.9.9",
+    "google-auth-httplib2>=0.4.0",
+    "google-auth-oauthlib>=1.4.0",
+    "huggingface-hub>=1.27.0",
+    "langchain>=1.4.0",
+    "langchain-openai>=1.6.0",
+    "langfuse>=4.15.2",
+    "langgraph>=1.2.10",
+    "matplotlib>=3.8",
+    "openai==2.45.0",
+    "pandas>=2.0",
+    "playwright>=1.62.0",
+    "pydantic==2.13.4",
+    "pytest>=9.1.1",
+    "python-chess>=1.999",
+    "python-dotenv>=1.2.2",
+    "pyyaml>=6.0.3",
+    "sentence-transformers>=6.0.0",
+    "starlette>=0.40",
+    "streamlit>=1.59.1",
+    "tenacity>=9.1.4",
+    "transformers>=4.51.0",
+    "trafilatura>=2.2.0",
+]
+
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[dependency-groups]
+dev = [
+    "langgraph-cli[inmem]>=0.4.31",
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+pythonpath = ["src", "tests"]
+addopts = "-m 'not integration'"
+markers = [
+    "integration: tests that call external services or require real credentials",
+]
+
+[tool.ruff]
+line-length = 100

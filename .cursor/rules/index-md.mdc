@@ -1,0 +1,24 @@
+---
+description: Keep src/**/INDEX.md folder indexes updated when code changes
+globs: src/**/*
+alwaysApply: false
+---
+
+# Folder INDEX.md maintenance
+
+Each code folder under `src/` has an `INDEX.md` that indexes files, AGENTS.md cross-refs, tests, and gaps.
+
+When you **add, remove, rename, or materially change** modules under `src/`:
+
+1. Update the **`INDEX.md` in that folder** (and parent `src/INDEX.md` if subfolders or top-level files changed).
+2. Update **`AGENTS.md`** if architecture, "current implementation", or conventions changed.
+3. Update **`docs/CONFIG.md`** if settings or config consumers changed.
+
+Each `INDEX.md` should stay accurate for:
+
+- File table (role + AGENTS.md link)
+- Callers / dependencies
+- Related tests
+- Gaps / redundancies (remove fixed items; add new ones)
+
+Do not create `INDEX.md` outside `src/` code folders unless the user asks.

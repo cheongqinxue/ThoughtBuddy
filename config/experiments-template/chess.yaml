@@ -1,0 +1,44 @@
+# Chess experiment run configuration (copy to config/experiments/ and customize).
+#
+# Usage:
+#   cp config/experiments-template/chess.yaml config/experiments/my-run.yaml
+#   ./run.sh config/experiments/my-run.yaml start
+#
+# On start, this file is applied to the main ThoughtBuddy config.yaml (llm + experiment
+# sections) and drives vLLM profile, ports, timeouts, and log paths for run.sh.
+
+experiment: chess
+entrypoint: experiments.chess.setup
+
+# LLM profile for both vLLM (VLLM_PROFILE) and ThoughtBuddy (config.yaml llm.*).
+# Supported: qwen3 | lfm
+llm:
+  profile: qwen3
+
+# Process stack started by run.sh
+stack:
+  thoughtbuddy_port: 2024
+  vllm_port: 8000
+  vllm_ready_timeout_seconds: 600
+  thoughtbuddy_ready_timeout_seconds: 120
+  monitor_interval_seconds: 5
+  # When true, never start Langfuse even if observability.langfuse.enabled in app config
+  skip_langfuse: false
+  # When true, stop Langfuse containers on run.sh stop (if we started them)
+  stop_langfuse_on_teardown: true
+
+# Runtime directories (logs and PIDs live under run_dir)
+paths:
+  run_dir: .data/experiments/chess
+
+# Main ThoughtBuddy config file to update before starting the stack
+app_config: config.yaml
+
+# Chess experiment knobs synced into app_config → experiment.chess.*
+chess:
+  engine_path: .data/stockfish/engine
+  agent_color: white
+  agent_generation: 0
+  skill_level: 3
+  move_time_seconds: 0.1
+  engine_timeout_seconds: 10

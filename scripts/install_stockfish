@@ -1,0 +1,114 @@
+#!/usr/bin/env bash
+# Install Stockfish for the ThoughtBuddy chess experiment.
+#
+# Prefers a project-local binary at .data/stockfish/engine (no sudo required).
+# Falls back to apt on Debian/Ubuntu when sudo is available.
+#
+# Usage:
+#   ./scripts/install_stockfish
+
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+INSTALL_DIR="${THOUGHTBUDDY_STOCKFISH_DIR:-${ROOT}/.data/stockfish}"
+ENGINE_PATH="${INSTALL_DIR}/engine"
+RELEASE_TAG="${STOCKFISH_RELEASE_TAG:-sf_19}"
+ASSET_NAME="stockfish-linux-x86-64-universal.tar.gz"
+DOWNLOAD_URL="https://github.com/official-stockfish/Stockfish/releases/download/${RELEASE_TAG}/${ASSET_NAME}"
+
+require_command() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    echo "error: required command not found: $1" >&2
+    exit 1
+  fi
+}
+
+verify_engine() {
+  if [[ ! -x "${ENGINE_PATH}" ]]; then
+    echo "error: Stockfish binary missing at ${ENGINE_PATH}" >&2
+    exit 1
+  fi
+  "${ENGINE_PATH}" --version 2>&1 | head -n 1
+}
+
+install_local_binary() {
+  require_command curl
+  require_command tar
+  mkdir -p "${INSTALL_DIR}"
+  local tmpdir
+  tmpdir="$(mktemp -d)"
+  trap 'rm -rf "${tmpdir}"' EXIT
+
+  echo "Downloading Stockfish ${RELEASE_TAG} (${ASSET_NAME})..."
+  curl -fsSL -o "${tmpdir}/${ASSET_NAME}" "${DOWNLOAD_URL}"
+  tar -xzf "${tmpdir}/${ASSET_NAME}" -C "${tmpdir}"
+  cp "${tmpdir}/stockfish/stockfish-linux-x86-64-universal" "${ENGINE_PATH}"
+  chmod +x "${ENGINE_PATH}"
+  echo "Installed project-local Stockfish:"
+  verify_engine
+}
+
+install_with_apt() {
+  if ! command -v apt-get >/dev/null 2>&1; then
+    return 1
+  fi
+  if ! command -v sudo >/dev/null 2>&1; then
+    return 1
+  fi
+  echo "Installing Stockfish via apt (requires sudo)..."
+  sudo apt-get update -qq
+  sudo apt-get install -y stockfish
+  if command -v stockfish >/dev/null 2>&1; then
+    stockfish --version 2>&1 | head -n 1
+    echo
+    echo "System Stockfish is on PATH. config.yaml can use engine_path: stockfish"
+    return 0
+  fi
+  if [[ -x /usr/games/stockfish ]]; then
+    /usr/games/stockfish --version 2>&1 | head -n 1
+    echo
+    echo "System Stockfish is at /usr/games/stockfish"
+    return 0
+  fi
+  return 1
+}
+
+main() {
+  if [[ -x "${ENGINE_PATH}" ]]; then
+    echo "Stockfish already installed at ${ENGINE_PATH}:"
+    verify_engine
+    exit 0
+  fi
+
+  if command -v stockfish >/dev/null 2>&1; then
+    echo "Stockfish already available on PATH:"
+    stockfish --version 2>&1 | head -n 1
+    echo
+    echo "Optional: run without args again after removing ${ENGINE_PATH} to install the project-local copy."
+    exit 0
+  fi
+
+  if install_with_apt; then
+    cat <<EOF
+
+Chess experiment:
+  Set experiment.active: chess in config.yaml
+  Optionally set experiment.chess.engine_path to "stockfish"
+
+EOF
+    exit 0
+  fi
+
+  install_local_binary
+  cat <<EOF
+
+Stockfish ready for the chess experiment.
+
+Binary: ${ENGINE_PATH}
+Config: experiment.chess.engine_path defaults to ".data/stockfish/engine"
+Enable: set experiment.active: chess in config.yaml
+
+EOF
+}
+
+main "$@"

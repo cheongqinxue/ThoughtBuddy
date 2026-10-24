@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# Verify local vLLM returns structured tool_calls (required for the harness).
+#
+# vLLM is not started here — run ./scripts/start_vllm_agent.sh first.
+# Run this (and other verify_* scripts) before experiment runners such as
+# src/experiments/chess/run.sh start — experiments assume smoke tests passed.
+#
+# Usage:
+#   ./scripts/verify_vllm
+#   VLLM_BASE_URL=http://127.0.0.1:8000/v1 ./scripts/verify_vllm
+
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+BASE_URL="${VLLM_BASE_URL:-http://127.0.0.1:8000/v1}"
+
+require_command() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    echo "error: required command not found: $1" >&2
+    exit 1
+  fi
+}
+
+wait_for_vllm() {
+  echo "Waiting for vLLM at ${BASE_URL}/models ..."
+  local attempt=0
+  local max_attempts=90
+  while (( attempt < max_attempts )); do
+    if curl --silent --fail --max-time 5 "${BASE_URL}/models" >/dev/null 2>&1; then
+      echo "vLLM is ready."
+      return
+    fi
+    attempt=$((attempt + 1))
+    sleep 2
+  done
+  cat >&2 <<EOF
+error: vLLM did not become ready within $((max_attempts * 2)) seconds.
+
+Start it in another terminal:
+  ./scripts/start_vllm_agent.sh
+
+Then rerun:
+  ./scripts/verify_vllm
+EOF
+  exit 1
+}
+
+main() {
+  require_command curl
+  wait_for_vllm
+
+  echo "Running vLLM integration tests ..."
+  cd "${ROOT}"
+  THOUGHTBUDDY_VLLM_SMOKE=1 uv run pytest tests/integration/test_vllm_tools.py -m integration -v
+
+  cat <<EOF
+
+vLLM tool calling verified.
+
+Profile: see config.yaml llm.profile (VLLM_PROFILE=qwen3|lfm, ./scripts/set_llm_profile.sh)
+Model:   see config.yaml llm.agent_model (override with VLLM_MODEL)
+URL:    ${BASE_URL}
+
+EOF
+}
+
+main "$@"

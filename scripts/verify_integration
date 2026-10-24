@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Run the full ThoughtBuddy integration test suite.
+#
+# Tests skip automatically when a dependency is unavailable (vLLM down, no API key,
+# Stockfish missing, etc.). Use the focused verify scripts when you need fail-fast
+# smoke checks during stack startup:
+#
+#   ./scripts/verify_vllm      # requires running vLLM
+#   ./scripts/verify_langfuse  # starts Langfuse if needed
+#
+# Usage:
+#   ./scripts/verify_integration
+#   ./scripts/verify_integration tests/integration/test_vllm_tools.py -k tool_calls
+
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+cd "${ROOT}"
+exec uv run pytest -m integration -v "$@"

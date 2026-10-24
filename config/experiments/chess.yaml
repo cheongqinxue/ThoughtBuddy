@@ -1,0 +1,28 @@
+# Default chess experiment run (qwen3). Copy and edit for alternate runs.
+experiment: chess
+entrypoint: experiments.chess.setup
+
+llm:
+  profile: qwen3
+
+stack:
+  thoughtbuddy_port: 2024
+  vllm_port: 8000
+  vllm_ready_timeout_seconds: 600
+  thoughtbuddy_ready_timeout_seconds: 120
+  monitor_interval_seconds: 5
+  skip_langfuse: false
+  stop_langfuse_on_teardown: true
+
+paths:
+  run_dir: .data/experiments/chess
+
+app_config: config.yaml
+
+chess:
+  engine_path: .data/stockfish/engine
+  agent_color: white
+  agent_generation: 1
+  skill_level: 3
+  move_time_seconds: 0.1
+  engine_timeout_seconds: 10

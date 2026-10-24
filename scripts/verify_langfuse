@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+# Start local Langfuse (if needed) and verify ThoughtBuddy tracing integration.
+#
+# Assertions live in pytest (tests/test_langfuse_integration.py). This script
+# only orchestrates infra; see AGENTS.md "Test workflow".
+#
+# Usage:
+#   ./scripts/verify_langfuse
+
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+LANGFUSE_DIR="${THOUGHTBUDDY_LANGFUSE_DIR:-${ROOT}/.data/langfuse-docker}"
+ENV_FILE="${LANGFUSE_DIR}/.env"
+LANGFUSE_HOST_PORT="${LANGFUSE_HOST_PORT:-3001}"
+UI_URL="${LANGFUSE_UI_URL:-http://localhost:${LANGFUSE_HOST_PORT}}"
+START_SCRIPT="${ROOT}/scripts/start_langfuse"
+
+require_command() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    echo "error: required command not found: $1" >&2
+    exit 1
+  fi
+}
+
+langfuse_healthy() {
+  curl --silent --fail --max-time 5 "${UI_URL}/api/public/health" >/dev/null 2>&1
+}
+
+wait_for_langfuse() {
+  echo "Waiting for Langfuse at ${UI_URL}..."
+  local attempt=0
+  local max_attempts=90
+  while (( attempt < max_attempts )); do
+    if langfuse_healthy; then
+      echo "Langfuse is healthy."
+      return
+    fi
+    attempt=$((attempt + 1))
+    sleep 2
+  done
+  echo "error: Langfuse did not become healthy within $((max_attempts * 2)) seconds" >&2
+  echo "Check logs: ./scripts/start_langfuse logs" >&2
+  exit 1
+}
+
+ensure_docker() {
+  if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
+    return
+  fi
+  cat >&2 <<EOF
+error: Docker with the Compose plugin is required but not installed.
+
+Install on Ubuntu:
+  sudo apt-get update
+  sudo apt-get install -y docker.io docker-compose-v2
+  sudo usermod -aG docker "\$USER"   # then log out/in
+
+Then rerun:
+  ./scripts/verify_langfuse
+EOF
+  exit 1
+}
+
+main() {
+  require_command curl
+  ensure_docker
+
+  if langfuse_healthy; then
+    echo "Langfuse already running at ${UI_URL}"
+  else
+    echo "Starting Langfuse..."
+    "${START_SCRIPT}" --detach
+    wait_for_langfuse
+  fi
+
+  echo "Syncing Langfuse credentials into ${ROOT}/.env..."
+  uv run python "${ROOT}/scripts/sync_langfuse_env.py" --base-url "${UI_URL}"
+
+  echo "Running ThoughtBuddy Langfuse integration tests (trace deletion queued afterward)..."
+  cd "${ROOT}"
+  uv run pytest tests/test_langfuse_integration.py -m integration -v
+
+  cat <<EOF
+
+Langfuse integration verified.
+
+UI:      ${UI_URL}
+Keys:    ${ENV_FILE} (synced to ${ROOT}/.env)
+
+ThoughtBuddy runtime:
+  config.yaml: observability.langfuse.enabled=true
+  .env:        LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY / LANGFUSE_BASE_URL
+  Restart:     uv run langgraph dev
+
+EOF
+}
+
+main "$@"

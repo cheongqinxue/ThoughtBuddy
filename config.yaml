@@ -1,0 +1,73 @@
+# ThoughtBuddy non-sensitive configuration.
+# Secrets (API keys) live in .env — see .env-template.
+
+llm:
+  openai_base_url: http://localhost:8000/v1
+  # Agent profile: qwen3 (default) | lfm — switch with ./scripts/set_llm_profile.sh
+  profile: qwen3
+  # qwen3: Qwen/Qwen3-8B-AWQ + hermes + awq, 32K
+  # lfm:   LiquidAI/LFM2.5-8B-A1B + lfm2 + reasoning parser, 128K native
+  agent_model: Qwen/Qwen3-8B-AWQ
+  # tokenizer_model: optional HF hub id; defaults to agent_model
+  enable_thinking: false
+  temperature: 0.2
+  max_tokens: 1024
+  max_retries: 2
+  context_window_tokens: 32768
+logging:
+  level: INFO
+  retry:
+    log_each_attempt: false
+    max_attempts: 4
+    min_wait_seconds: 1.0
+    max_wait_seconds: 30.0
+runtime:
+  db_path: data/thoughtbuddy.db
+  lock_path: data/thoughtbuddy.lock
+  heartbeat_interval_seconds: 1
+  stale_task_seconds: 1800
+  default_thread_id: thoughtbuddy-main
+  upcoming_alerts_window_seconds: 3600
+context:
+  retain_messages: 20
+  # Hard prompt cap = context_window_tokens - max_tokens (31744 with defaults below).
+  # Compaction is always on: archived context over compact_token_threshold triggers
+  # summarization; when threshold is 0, uses compact_token_ratio × max_prompt (90%).
+  compact_token_threshold: 28000
+  compact_token_ratio: 0.9
+websearch:
+  provider: langsearch  # backend id; credentials in .env per provider
+
+webfetch:
+  timeout_seconds: 30
+  network_idle_timeout_ms: 5000
+  post_load_wait_ms: 1000
+  max_chars: 40000
+memory:
+  store_path: data/memories/chroma
+  collection_name: thoughtbuddy_memories
+  embedding_model: sentence-transformers/all-MiniLM-L6-v2
+  embedding_device: ''
+  recall_multiplier: 4
+scratchpad:
+  directory: .data/scratchpad
+monitor:
+  max_concurrent: 5
+  default_timeout_seconds: 600
+  min_expected_seconds: 60
+  min_expected_heartbeats: 5
+  log_tail_bytes: 8192
+experiment:
+  active: chess
+  chess:
+    engine_path: .data/stockfish/engine
+    agent_color: white
+    agent_generation: 1
+    skill_level: 3
+    move_time_seconds: 0.1
+    engine_timeout_seconds: 10
+observability:
+  langfuse:
+    enabled: true
+    base_url: http://localhost:3001
+    log_min_level: WARNING
